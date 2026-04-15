@@ -3,7 +3,9 @@ const mongoose = require('mongoose');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const path = require('path');
-const fs = require('fs');
+
+// Load environment variables
+require('dotenv').config();
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -15,18 +17,12 @@ const app = express();
 
 // Middleware
 app.use(cors());
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use('/uploads', express.static('uploads'));
+app.use(bodyParser.json({ limit: '10mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.static('public'));
 
-// Create uploads directory if not exists
-if (!fs.existsSync('./uploads')) {
-    fs.mkdirSync('./uploads');
-}
-
 // MongoDB Connection
-require('./config/db');
+require('./config/db')();
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -41,6 +37,6 @@ app.get('*', (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-    console.log(`Visit: http://localhost:${PORT}`);
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`🌐 Visit: http://localhost:${PORT}`);
 });
