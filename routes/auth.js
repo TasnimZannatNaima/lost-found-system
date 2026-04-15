@@ -1,24 +1,39 @@
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
+const { sendEmail, emailTemplates } = require('../config/email');
 
 // Register
 router.post('/register', async (req, res) => {
     try {
-        const { name, email, password } = req.body;
+        const { name, email, password, phone } = req.body;
         
         const existingUser = await User.findOne({ email });
         if (existingUser) {
             return res.status(400).json({ error: 'Email already registered' });
         }
         
-        const user = new User({ name, email, password, role: 'user' });
+        const user = new User({ 
+            name, 
+            email, 
+            password, 
+            phone: phone || '',
+            role: 'user' 
+        });
         await user.save();
+        
+        // Send welcome email
+        await sendEmail(
+            email,
+            'Welcome to Lost & Found System!',
+            emailTemplates.welcome(name)
+        );
         
         const userResponse = {
             _id: user._id,
             name: user.name,
             email: user.email,
+            phone: user.phone,
             role: user.role
         };
         
@@ -42,20 +57,11 @@ router.post('/login', async (req, res) => {
             _id: user._id,
             name: user.name,
             email: user.email,
+            phone: user.phone,
             role: user.role
         };
         
         res.json(userResponse);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// Get current user
-router.get('/me/:id', async (req, res) => {
-    try {
-        const user = await User.findById(req.params.id).select('-password');
-        res.json(user);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }

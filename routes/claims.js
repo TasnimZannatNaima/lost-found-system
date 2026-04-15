@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Claim = require('../models/Claim');
 const Item = require('../models/Item');
+const { sendEmail, emailTemplates } = require('../config/email');
 
 // Submit Claim
 router.post('/', async (req, res) => {
@@ -21,6 +22,24 @@ router.post('/', async (req, res) => {
         });
         
         await claim.save();
+        
+        // Get populated data for email
+        const populatedClaim = await Claim.findById(claim._id)
+            .populate('item_id')
+            .populate('claimant_id', 'name email');
+        
+        // Send confirmation email to claimant
+        if (populatedClaim.claimant_id && populatedClaim.claimant_id.email) {
+            await sendEmail(
+                populatedClaim.claimant_id.email,
+                'Claim Submitted Successfully',
+                emailTemplates.claimSubmitted(
+                    populatedClaim.claimant_id.name,
+                    populatedClaim.item_id.item_name
+                )
+            );
+        }
+        
         res.status(201).json(claim);
     } catch (error) {
         res.status(500).json({ error: error.message });
