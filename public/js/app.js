@@ -746,20 +746,37 @@ async function rejectItemFromModal() {
 }
 
 async function approveItem(id) {
-    await apiCall(`/api/admin/item/${id}`, 'PUT', { status: 'approved' });
-    alert('✅ Approved! Email sent to owner.');
-    loadPendingItems();
-    updatePendingCount();
+    try {
+        await apiCall(`/api/admin/item/${id}`, 'PUT', { status: 'approved' });
+        alert('✅ Item approved! Email notification sent to owner.');
+        loadPendingItems();
+        updatePendingCount();
+    } catch (error) {
+        alert('Failed to approve: ' + error.message);
+    }
 }
 
 async function rejectItem(id) {
-    if (!confirm('Reject and delete this item? Owner will receive an email notification.')) return;
-    await apiCall(`/api/admin/item/${id}`, 'DELETE');
-    alert('❌ Item rejected. Email sent to owner.');
-    loadPendingItems();
-    updatePendingCount();
+    if (!confirm('Reject this item? Owner will be notified.')) return;
+    
+    try {
+        await apiCall(`/api/admin/item/${id}`, 'PUT', { status: 'rejected' });
+        alert('❌ Item rejected. Email sent to owner.');
+        loadPendingItems();
+        updatePendingCount();
+    } catch (error) {
+        alert('Failed to reject: ' + error.message);
+    }
 }
-
+async function updatePendingCount() {
+    try {
+        const items = await apiCall('/api/admin/pending');
+        const badge = document.getElementById('pendingCount');
+        if (badge) badge.textContent = items.length;
+    } catch (e) {
+        console.error('Failed to update pending count:', e);
+    }
+}
 async function loadAllItemsAdmin() {
     const [lost, found] = await Promise.all([apiCall('/api/items/lost?role=admin'), apiCall('/api/items/found?role=admin')]);
     const all = [...lost, ...found];

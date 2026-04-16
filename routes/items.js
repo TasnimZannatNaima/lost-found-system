@@ -1,20 +1,15 @@
 const express = require('express');
 const router = express.Router();
 const Item = require('../models/Item');
-const User = require('../models/User');
 const upload = require('../middleware/upload');
 const cloudinary = require('../config/cloudinary');
 const streamifier = require('streamifier');
-const { sendEmail, emailTemplates } = require('../config/email');
 
-// Helper function to upload to Cloudinary
+// Helper: Upload to Cloudinary
 const uploadToCloudinary = (buffer) => {
     return new Promise((resolve, reject) => {
         const uploadStream = cloudinary.uploader.upload_stream(
-            {
-                folder: 'lost-found-system',
-                resource_type: 'auto'
-            },
+            { folder: 'lost-found-system', resource_type: 'auto' },
             (error, result) => {
                 if (error) reject(error);
                 else resolve(result);
@@ -22,6 +17,13 @@ const uploadToCloudinary = (buffer) => {
         );
         streamifier.createReadStream(buffer).pipe(uploadStream);
     });
+};
+
+// Helper: Convert to Base64
+const convertToBase64 = (file) => {
+    const mimeType = file.mimetype || 'image/jpeg';
+    const base64Data = file.buffer.toString('base64');
+    return `data:${mimeType};base64,${base64Data}`;
 };
 
 // Post Lost Item
@@ -33,18 +35,20 @@ router.post('/lost', upload.single('image'), async (req, res) => {
         
         if (req.file) {
             try {
+                // Try Cloudinary first
                 if (process.env.CLOUDINARY_CLOUD_NAME) {
                     const result = await uploadToCloudinary(req.file.buffer);
                     imageUrl = result.secure_url;
+                    console.log('✅ Image uploaded to Cloudinary');
                 } else {
-                    const mimeType = req.file.mimetype;
-                    const base64Data = req.file.buffer.toString('base64');
-                    imageUrl = `data:${mimeType};base64,${base64Data}`;
+                    // Fallback to Base64
+                    imageUrl = convertToBase64(req.file);
+                    console.log('✅ Image saved as Base64 (Cloudinary not configured)');
                 }
             } catch (uploadError) {
-                const mimeType = req.file.mimetype;
-                const base64Data = req.file.buffer.toString('base64');
-                imageUrl = `data:${mimeType};base64,${base64Data}`;
+                // Cloudinary failed, use Base64
+                console.log('⚠️ Cloudinary failed, using Base64 fallback');
+                imageUrl = convertToBase64(req.file);
             }
         }
         
@@ -62,6 +66,7 @@ router.post('/lost', upload.single('image'), async (req, res) => {
         await item.save();
         res.status(201).json(item);
     } catch (error) {
+        console.error('Error posting lost item:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -78,15 +83,14 @@ router.post('/found', upload.single('image'), async (req, res) => {
                 if (process.env.CLOUDINARY_CLOUD_NAME) {
                     const result = await uploadToCloudinary(req.file.buffer);
                     imageUrl = result.secure_url;
+                    console.log('✅ Image uploaded to Cloudinary');
                 } else {
-                    const mimeType = req.file.mimetype;
-                    const base64Data = req.file.buffer.toString('base64');
-                    imageUrl = `data:${mimeType};base64,${base64Data}`;
+                    imageUrl = convertToBase64(req.file);
+                    console.log('✅ Image saved as Base64');
                 }
             } catch (uploadError) {
-                const mimeType = req.file.mimetype;
-                const base64Data = req.file.buffer.toString('base64');
-                imageUrl = `data:${mimeType};base64,${base64Data}`;
+                console.log('⚠️ Cloudinary failed, using Base64 fallback');
+                imageUrl = convertToBase64(req.file);
             }
         }
         
@@ -104,35 +108,23 @@ router.post('/found', upload.single('image'), async (req, res) => {
         await item.save();
         res.status(201).json(item);
     } catch (error) {
+        console.error('Error posting found item:', error);
         res.status(500).json({ error: error.message });
     }
 });
 
-// Get Lost Items (with search)
+// Get Lost Items
 router.get('/lost', async (req, res) => {
     try {
-        const { role, search, location } = req.query;
+        const { role } = req.query;
         let query = { category: 'lost' };
         
         if (role !== 'admin') {
             query.status = 'approved';
         }
         
-        // Search functionality
-        if (search) {
-            query.$or = [
-                { item_name: { $regex: search, $options: 'i' } },
-                { description: { $regex: search, $options: 'i' } }
-            ];
-        }
-        
-        // Location filter
-        if (location) {
-            query.location = { $regex: location, $options: 'i' };
-        }
-        
         const items = await Item.find(query)
-            .populate('user_id', 'name email phone')
+            .populate('user_id', 'name email')
             .sort({ createdAt: -1 });
         res.json(items);
     } catch (error) {
@@ -140,76 +132,19 @@ router.get('/lost', async (req, res) => {
     }
 });
 
-// Get Found Items (with search)
+// Get Found Items
 router.get('/found', async (req, res) => {
     try {
-        const { role, search, location } = req.query;
+        const { role } = req.query;
         let query = { category: 'found' };
         
         if (role !== 'admin') {
             query.status = 'approved';
         }
         
-        // Search functionality
-        if (search) {
-            query.$or = [
-                { item_name: { $regex: search, $options: 'i' } },
-                { description: { $regex: search, $options: 'i' } }
-            ];
-        }
-        
-        // Location filter
-        if (location) {
-            query.location = { $regex: location, $options: 'i' };
-        }
-        
         const items = await Item.find(query)
-            .populate('user_id', 'name email phone')
+            .populate('user_id', 'name email')
             .sort({ createdAt: -1 });
-        res.json(items);
-    } catch (error) {
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// Advanced search endpoint
-router.get('/search', async (req, res) => {
-    try {
-        const { q, category, location, dateFrom, dateTo, role } = req.query;
-        let query = {};
-        
-        if (category && category !== 'all') {
-            query.category = category;
-        }
-        
-        if (role !== 'admin') {
-            query.status = 'approved';
-        }
-        
-        // Text search
-        if (q) {
-            query.$or = [
-                { item_name: { $regex: q, $options: 'i' } },
-                { description: { $regex: q, $options: 'i' } }
-            ];
-        }
-        
-        // Location filter
-        if (location) {
-            query.location = { $regex: location, $options: 'i' };
-        }
-        
-        // Date range filter
-        if (dateFrom || dateTo) {
-            query.date = {};
-            if (dateFrom) query.date.$gte = new Date(dateFrom);
-            if (dateTo) query.date.$lte = new Date(dateTo);
-        }
-        
-        const items = await Item.find(query)
-            .populate('user_id', 'name email phone')
-            .sort({ createdAt: -1 });
-        
         res.json(items);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -221,6 +156,45 @@ router.get('/user/:userId', async (req, res) => {
     try {
         const items = await Item.find({ user_id: req.params.userId })
             .sort({ createdAt: -1 });
+        res.json(items);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Search items
+router.get('/search', async (req, res) => {
+    try {
+        const { q, category, location, dateFrom, role } = req.query;
+        let query = {};
+        
+        if (category && category !== 'all') {
+            query.category = category;
+        }
+        
+        if (role !== 'admin') {
+            query.status = 'approved';
+        }
+        
+        if (q) {
+            query.$or = [
+                { item_name: { $regex: q, $options: 'i' } },
+                { description: { $regex: q, $options: 'i' } }
+            ];
+        }
+        
+        if (location) {
+            query.location = { $regex: location, $options: 'i' };
+        }
+        
+        if (dateFrom) {
+            query.date = { $gte: new Date(dateFrom) };
+        }
+        
+        const items = await Item.find(query)
+            .populate('user_id', 'name email')
+            .sort({ createdAt: -1 });
+        
         res.json(items);
     } catch (error) {
         res.status(500).json({ error: error.message });

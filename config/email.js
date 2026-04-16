@@ -2,7 +2,6 @@ const nodemailer = require('nodemailer');
 
 // Create transporter
 const createTransporter = () => {
-    // Use Gmail or other email service
     return nodemailer.createTransport({
         service: 'gmail',
         auth: {
@@ -47,7 +46,7 @@ const emailTemplates = {
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 20px;">
                 <div style="background: white; padding: 30px; border-radius: 15px;">
                     <h2 style="color: #4361ee; margin-bottom: 20px;">
-                        <i class="fas fa-hand-holding-heart"></i> Welcome to Lost & Found!
+                        🎉 Welcome to Lost & Found!
                     </h2>
                     <p style="font-size: 16px; color: #333;">Hello <strong>${userName}</strong>,</p>
                     <p style="font-size: 16px; color: #333;">Thank you for joining our Lost & Found community! You can now:</p>
@@ -67,7 +66,7 @@ const emailTemplates = {
     },
     
     // Item approved notification
-    itemApproved: (userName, itemName, itemId) => {
+    itemApproved: (userName, itemName) => {
         return `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); border-radius: 20px;">
                 <div style="background: white; padding: 30px; border-radius: 15px;">
@@ -127,13 +126,12 @@ const emailTemplates = {
     // Claim status update
     claimStatusUpdate: (userName, itemName, status) => {
         const isApproved = status === 'approved';
-        const bgColor = isApproved ? '#11998e, #38ef7d' : '#eb3349, #f45c43';
         const titleColor = isApproved ? '#11998e' : '#eb3349';
         const emoji = isApproved ? '✅' : '❌';
         const statusText = isApproved ? 'Approved' : 'Not Approved';
         
         return `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: linear-gradient(135deg, ${bgColor}); border-radius: 20px;">
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: linear-gradient(135deg, ${isApproved ? '#11998e, #38ef7d' : '#eb3349, #f45c43'}); border-radius: 20px;">
                 <div style="background: white; padding: 30px; border-radius: 15px;">
                     <h2 style="color: ${titleColor}; margin-bottom: 20px;">
                         ${emoji} Claim ${statusText}
