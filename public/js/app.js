@@ -659,58 +659,62 @@ async function loadUsersAdmin() {
 }
 
 async function loadPendingItems() {
-    const items = await apiCall('/api/admin/pending');
-    const container = document.getElementById('adminContent');
-    
-    if (!items.length) {
-        container.innerHTML = `<div class="alert alert-success"><i class="fas fa-check-circle me-2"></i>No pending items for approval!</div>`;
-        return;
-    }
-    
-    container.innerHTML = `
-        <div class="alert alert-warning">
-            <i class="fas fa-info-circle me-2"></i>
-            ${items.length} item(s) waiting for your approval
-        </div>
-        ${items.map(item => `
-            <div class="item-card mb-3">
-                <div class="row g-0">
-                    <div class="col-md-3">
-                        ${item.image ? `<img src="${item.image}" class="img-fluid rounded-start h-100" style="object-fit: cover;">` : 
-                        `<div class="bg-light h-100 d-flex align-items-center justify-content-center p-4">
-                            <i class="fas fa-image fa-3x text-muted"></i>
-                        </div>`}
-                    </div>
-                    <div class="col-md-6">
-                        <div class="p-3">
-                            <span class="badge bg-${item.category === 'lost' ? 'primary' : 'success'} mb-2">
-                                ${item.category.toUpperCase()}
-                            </span>
-                            <h5>${escapeHtml(item.item_name)}</h5>
-                            <p>${escapeHtml(item.description)}</p>
-                            <small class="text-muted">
-                                <i class="fas fa-user me-1"></i>Posted by: ${escapeHtml(item.user_id?.name || 'Unknown')}<br>
-                                <i class="fas fa-envelope me-1"></i>${escapeHtml(item.user_id?.email || 'No email')}<br>
-                                <i class="fas fa-phone me-1"></i>${escapeHtml(item.user_id?.phone || 'No phone')}<br>
-                                <i class="fas fa-map-pin me-1"></i>${escapeHtml(item.location)}<br>
-                                <i class="fas fa-calendar me-1"></i>${new Date(item.date).toLocaleDateString()}
-                            </small>
+    try {
+        const items = await apiCall('/api/admin/pending');
+        const container = document.getElementById('adminContent');
+        
+        if (!items.length) {
+            container.innerHTML = `<div class="alert alert-success"><i class="fas fa-check-circle me-2"></i>No pending items for approval!</div>`;
+            return;
+        }
+        
+        container.innerHTML = `
+            <div class="alert alert-warning">
+                <i class="fas fa-info-circle me-2"></i>
+                ${items.length} item(s) waiting for your approval
+            </div>
+            ${items.map(item => `
+                <div class="item-card mb-3">
+                    <div class="row g-0">
+                        <div class="col-md-3">
+                            ${item.image ? `<img src="${item.image}" class="img-fluid rounded-start h-100" style="object-fit: cover;">` : 
+                            `<div class="bg-light h-100 d-flex align-items-center justify-content-center p-4">
+                                <i class="fas fa-image fa-3x text-muted"></i>
+                            </div>`}
+                        </div>
+                        <div class="col-md-6">
+                            <div class="p-3">
+                                <span class="badge bg-${item.category === 'lost' ? 'primary' : 'success'} mb-2">
+                                    ${item.category.toUpperCase()}
+                                </span>
+                                <h5>${escapeHtml(item.item_name)}</h5>
+                                <p>${escapeHtml(item.description)}</p>
+                                <small class="text-muted">
+                                    <i class="fas fa-user me-1"></i>Posted by: ${escapeHtml(item.user_id?.name || 'Unknown')}<br>
+                                    <i class="fas fa-envelope me-1"></i>${escapeHtml(item.user_id?.email || 'No email')}<br>
+                                    <i class="fas fa-map-pin me-1"></i>${escapeHtml(item.location)}<br>
+                                    <i class="fas fa-calendar me-1"></i>${new Date(item.date).toLocaleDateString()}
+                                </small>
+                            </div>
+                        </div>
+                        <div class="col-md-3 d-flex flex-column justify-content-center p-3">
+                            <button class="btn btn-success mb-2" onclick="approveItem('${item._id}')">
+                                <i class="fas fa-check me-1"></i>Approve
+                            </button>
+                            <button class="btn btn-danger" onclick="rejectItem('${item._id}')">
+                                <i class="fas fa-times me-1"></i>Reject
+                            </button>
                         </div>
                     </div>
-                    <div class="col-md-3 d-flex flex-column justify-content-center p-3">
-                        <button class="btn btn-success mb-2" onclick="openApprovalModal('${item._id}', '${escapeHtml(item.item_name)}', '${escapeHtml(item.category)}')">
-                            <i class="fas fa-check me-1"></i>Review & Approve
-                        </button>
-                        <button class="btn btn-danger" onclick="rejectItem('${item._id}')">
-                            <i class="fas fa-times me-1"></i>Reject
-                        </button>
-                    </div>
                 </div>
-            </div>
-        `).join('')}
-    `;
+            `).join('')}
+        `;
+    } catch (error) {
+        console.error('Failed to load pending items:', error);
+        const container = document.getElementById('adminContent');
+        container.innerHTML = `<div class="alert alert-danger">Failed to load pending items: ${error.message}</div>`;
+    }
 }
-
 // 🔧 নতুন ফাংশন: অ্যাপ্রুভাল মডাল
 function openApprovalModal(itemId, itemName, category) {
     currentApprovalItemId = itemId;
@@ -746,31 +750,54 @@ async function rejectItemFromModal() {
 }
 
 async function approveItem(id) {
+    console.log('Approving item:', id);
     try {
-        await apiCall(`/api/admin/item/${id}`, 'PUT', { status: 'approved' });
+        const response = await fetch(`${API_BASE}/api/admin/item/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'approved' })
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to approve');
+        }
+        
         alert('✅ Item approved! Email notification sent to owner.');
         loadPendingItems();
         updatePendingCount();
     } catch (error) {
+        console.error('Approve error:', error);
         alert('Failed to approve: ' + error.message);
     }
 }
 
 async function rejectItem(id) {
+    console.log('Rejecting item:', id);
     if (!confirm('Reject this item? Owner will be notified.')) return;
     
     try {
-        await apiCall(`/api/admin/item/${id}`, 'PUT', { status: 'rejected' });
+        const response = await fetch(`${API_BASE}/api/admin/item/${id}`, {
+            method: 'DELETE'
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to reject');
+        }
+        
         alert('❌ Item rejected. Email sent to owner.');
         loadPendingItems();
         updatePendingCount();
     } catch (error) {
+        console.error('Reject error:', error);
         alert('Failed to reject: ' + error.message);
     }
 }
 async function updatePendingCount() {
     try {
-        const items = await apiCall('/api/admin/pending');
+        const response = await fetch(`${API_BASE}/api/admin/pending`);
+        const items = await response.json();
         const badge = document.getElementById('pendingCount');
         if (badge) badge.textContent = items.length;
     } catch (e) {
